@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JP Furniture</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,"Noto Sans Bengali",sans-serif;background:#f5f5f5;color:#222}
+header{background:#fff;position:sticky;top:0;z-index:3;padding:15px;box-shadow:0 2px 12px #0001}.wrap{max-width:950px;margin:auto}
+.logo{font-size:27px;font-weight:800}.tag{color:#666;margin:3px 0 12px}
+.search{display:flex;gap:8px}.search input{flex:1;padding:14px;border:1px solid #ddd;border-radius:12px;font-size:16px}.btn{border:0;border-radius:12px;padding:13px 17px;background:#222;color:#fff;font-weight:700;cursor:pointer}
+.hero{text-align:center;padding:30px 15px;background:#eaeaea}.hero h1{margin:0 0 8px}.hero p{color:#555}
+section{padding:22px 15px}.title{font-size:23px;font-weight:800;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:15px}.card{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px #0001}.card img{width:100%;height:190px;object-fit:cover;background:#ddd}.info{padding:13px}.name{font-size:19px;font-weight:800}.price{font-size:20px;font-weight:800;margin:7px 0}.muted{color:#666;font-size:14px}.actions{display:flex;gap:8px;margin-top:11px}.actions a{flex:1;text-align:center;text-decoration:none;background:#eee;color:#222;padding:11px;border-radius:10px;font-weight:700}
+.admin{background:#fff;border-radius:18px;padding:18px}.field{margin:10px 0}.field label{display:block;font-weight:700;margin-bottom:6px}.field input,.field textarea{width:100%;padding:13px;border:1px solid #ddd;border-radius:10px;font-size:16px}.field textarea{min-height:80px;resize:vertical}
+.preview{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.preview img{width:82px;height:82px;object-fit:cover;border-radius:10px}.note{font-size:13px;color:#666}
+.empty{text-align:center;padding:30px;color:#777}
+@media(max-width:550px){.grid{grid-template-columns:1fr}.card img{height:220px}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<div class="logo">🛋️ JP Furniture</div><div class="tag">পুরাতন ও ভালো মানের ফার্নিচার</div>
+<div class="search"><input id="q" placeholder="খাট, সোফা, আলমারি..." oninput="render()"><button class="btn" onclick="render()">খুঁজুন</button></div>
+</div></header>
+
+<div class="hero"><div class="wrap"><h1>পছন্দের ফার্নিচার খুঁজুন</h1><p>ছবি দেখুন → দাম দেখুন → সরাসরি যোগাযোগ করুন</p><a class="btn" href="#products">ফার্নিচার দেখুন</a></div></div>
+
+<section id="products"><div class="wrap"><div class="title">ফার্নিচার</div><div id="grid" class="grid"></div></div></section>
+
+<section id="admin"><div class="wrap"><div class="admin">
+<div class="title">➕ নতুন ফার্নিচার যোগ করুন</div>
+<div class="field"><label>📷 ছবি</label><input id="photos" type="file" accept="image/*" multiple onchange="preview()"><div class="note">ছবি তুলুন অথবা Gallery থেকে এক/একাধিক ছবি নির্বাচন করুন।</div><div id="preview" class="preview"></div></div>
+<div class="field"><label>🛋️ ফার্নিচারের নাম</label><input id="name" placeholder="যেমন: কাঠের খাট"></div>
+<div class="field"><label>💰 দাম</label><input id="price" type="number" placeholder="যেমন: 8500"></div>
+<div class="field"><label>📝 বিবরণ</label><textarea id="desc" placeholder="ব্যবহৃত, ভালো অবস্থা, মাপ ইত্যাদি"></textarea></div>
+<button class="btn" onclick="addProduct()">✅ প্রকাশ করুন</button>
+<p class="note">ডেমো সংস্করণে তথ্য এই ব্রাউজারেই সংরক্ষিত হবে। আসল অনলাইন সাইটে সার্ভার/স্টোরেজ যুক্ত করলে সবাই পণ্যগুলো দেখতে পারবে।</p>
+</div></div></section>
+
+<section><div class="wrap"><div class="admin" style="text-align:center">
+<div class="title">📞 যোগাযোগ</div><p>শেখেরটেক ১২, আদাবর, মোহাম্মদপুর, ঢাকা</p>
+<a class="btn" href="tel:01915813242">📞 01915813242</a>
+<a class="btn" style="margin-left:6px" href="tel:01981232527">📞 01981232527</a>
+</div></div></section>
+<footer style="text-align:center;padding:25px;color:#777">© JP Furniture</footer>
+
+<script>
+let products=JSON.parse(localStorage.getItem("jpProducts")||"[]");
+function preview(){let p=document.getElementById("preview");p.innerHTML="";[...document.getElementById("photos").files].forEach(f=>{let i=document.createElement("img");i.src=URL.createObjectURL(f);p.appendChild(i)})}
+function addProduct(){
+ let files=[...document.getElementById("photos").files], name=document.getElementById("name").value.trim(), price=document.getElementById("price").value, desc=document.getElementById("desc").value.trim();
+ if(!files.length||!name||!price){alert("ছবি, নাম ও দাম দিন।");return}
+ Promise.all(files.map(f=>new Promise(res=>{let r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f)}))).then(imgs=>{
+   products.unshift({id:Date.now(),name,price,desc,imgs});localStorage.setItem("jpProducts",JSON.stringify(products));
+   document.getElementById("photos").value="";document.getElementById("name").value="";document.getElementById("price").value="";document.getElementById("desc").value="";document.getElementById("preview").innerHTML="";render();location.hash="products";
+ })
+}
+function render(){
+ let q=document.getElementById("q").value.trim().toLowerCase(), g=document.getElementById("grid");g.innerHTML="";
+ let list=products.filter(p=>p.name.toLowerCase().includes(q));
+ if(!list.length){g.innerHTML='<div class="empty" style="grid-column:1/-1">এখনও কোনো পণ্য যোগ করা হয়নি। নিচে গিয়ে “নতুন ফার্নিচার যোগ করুন” থেকে যোগ করুন।</div>';return}
+ list.forEach(p=>{let c=document.createElement("div");c.className="card";c.innerHTML=`<img src="${p.imgs[0]}" alt=""><div class="info"><div class="name">${escapeHtml(p.name)}</div><div class="price">৳ ${Number(p.price).toLocaleString("bn-BD")}</div><div class="muted">${escapeHtml(p.desc||"ভালো অবস্থায়")}</div><div class="actions"><a href="tel:01915813242">📞 কল</a><a href="tel:01981232527">💬 যোগাযোগ</a></div></div>`;g.appendChild(c)})
+}
+function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+render();
+</script>
+</body></html>
