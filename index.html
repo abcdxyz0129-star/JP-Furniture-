@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JP Furniture</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,"Noto Sans Bengali",sans-serif;background:#f5f5f5;color:#222}
+header{background:#222;color:#fff;padding:18px 14px;text-align:center}
+header h1{margin:0 0 6px;font-size:28px}
+header p{margin:0;color:#ddd}
+.container{max-width:1000px;margin:auto;padding:16px}
+.panel{background:#fff;border-radius:12px;padding:16px;margin-bottom:18px;box-shadow:0 2px 10px #00000012}
+h2{margin-top:0}
+input,textarea,button{width:100%;padding:12px;border:1px solid #ccc;border-radius:8px;font-size:16px}
+textarea{min-height:90px;resize:vertical}
+label{display:block;margin:10px 0 6px;font-weight:bold}
+button{background:#222;color:#fff;border:0;cursor:pointer;margin-top:10px}
+button.secondary{background:#666}
+button.danger{background:#b42318}
+button.small{width:auto;padding:8px 12px;margin:4px 4px 0 0;font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
+.card{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px #00000012}
+.card img{width:100%;height:210px;object-fit:cover;background:#eee}
+.card-body{padding:13px}
+.price{font-size:20px;font-weight:bold;margin:7px 0}
+.desc{color:#555;white-space:pre-wrap}
+.admin-only{display:none}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.status{padding:10px;border-radius:8px;background:#f0f0f0;margin-top:10px}
+.hidden{display:none!important}
+@media(max-width:600px){.row{grid-template-columns:1fr}}
+
+.product-link{display:block;text-decoration:none;color:inherit;cursor:pointer}
+.product-link .card{height:100%}
+.detail-page{max-width:900px;margin:0 auto;padding:16px}
+.detail-back{display:inline-block;margin:0 0 16px;padding:10px 16px;border-radius:9px;background:#222;color:#fff;text-decoration:none}
+.detail-card{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px #00000012}
+.detail-image{width:100%;max-height:560px;object-fit:contain;background:#eee;display:block}
+.detail-body{padding:20px}
+.detail-name{font-size:30px;margin:0 0 10px}
+.detail-price{font-size:24px;font-weight:bold;margin:8px 0 18px}
+.detail-desc{font-size:17px;line-height:1.7;color:#555;white-space:pre-wrap}
+
+</style>
+</head>
+<body>
+<header>
+  <h1>JP Furniture</h1>
+  <p>পুরাতন ও ব্যবহৃত ফার্নিচার</p>
+</header>
+
+<div class="container">
+
+  <section class="panel" id="loginPanel">
+    <h2>🔐 Admin Login</h2>
+    <p>শুধু Admin পণ্য যোগ, Edit ও Delete করতে পারবেন।</p>
+    <label>Email</label>
+    <input id="loginEmail" type="email" placeholder="Admin email">
+    <label>Password</label>
+    <input id="loginPassword" type="password" placeholder="Password">
+    <button id="loginBtn">Login</button>
+    <div id="loginStatus" class="status hidden"></div>
+  </section>
+
+  <section class="panel admin-only" id="adminPanel">
+    <h2 id="formTitle">➕ নতুন পণ্য যোগ করুন</h2>
+    <label>পণ্যের নাম</label>
+    <input id="productName" placeholder="যেমন: কাঠের আলমারি">
+
+    <label>দাম (টাকা)</label>
+    <input id="productPrice" type="number" min="0" placeholder="যেমন: 15000">
+
+    <label>ছবি</label>
+    <input id="productImage" type="file" accept="image/*">
+
+    <label>বিবরণ</label>
+    <textarea id="productDescription" placeholder="পণ্যের বিস্তারিত লিখুন"></textarea>
+
+    <button id="saveBtn">অনলাইনে প্রকাশ করুন</button>
+    <button id="cancelBtn" class="secondary hidden">Edit বাতিল</button>
+    <button id="logoutBtn" class="secondary">Logout</button>
+    <div id="saveStatus" class="status hidden"></div>
+  </section>
+
+  <section>
+    <div class="panel">
+      <h2>🛋️ আমাদের পণ্য</h2>
+      <div id="products" class="grid">
+        <p>পণ্য লোড হচ্ছে...</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const SUPABASE_URL = "https://jmekommypqtgncpgywtb.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptZWtvbW15cHF0Z25jcGd5d3RiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg2MTQ0NjksImV4cCI6MjEwNDE5MDQ2OX0.hkmfFhsIxvcv0gOhcD7ZGfSQpXou8eaN6gkGkaH6vnQ";
+const BUCKET = "furniture-images";
+
+const $ = id => document.getElementById(id);
+const tokenKey = "jp_admin_access_token";
+let accessToken = sessionStorage.getItem(tokenKey);
+let editingId = null;
+
+function publicHeaders(){
+  return {"apikey": SUPABASE_KEY, "Content-Type":"application/json"};
+}
+function authHeaders(){
+  if(!accessToken) throw new Error("Admin login প্রয়োজন");
+  return {
+    "apikey": SUPABASE_KEY,
+    "Authorization": "Bearer " + accessToken,
+    "Content-Type":"application/json"
+  };
+}
+function escapeHtml(v){
+  return String(v ?? "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[c]));
+}
+function setStatus(el,msg,show=true){
+  el.innerHTML = escapeHtml(msg);
+  el.classList.toggle("hidden",!show);
+}
+function showAdmin(){
+  $("loginPanel").classList.add("hidden");
+  $("adminPanel").style.display = "block";
+}
+function hideAdmin(){
+  $("loginPanel").classList.remove("hidden");
+  $("adminPanel").style.display = "none";
+  editingId = null;
+  resetForm();
+}
+function resetForm(){
+  $("formTitle").textContent = "➕ নতুন পণ্য যোগ করুন";
+  $("productName").value="";
+  $("productPrice").value="";
+  $("productImage").value="";
+  $("productDescription").value="";
+  $("saveBtn").textContent="অনলাইনে প্রকাশ করুন";
+  $("cancelBtn").classList.add("hidden");
+  setStatus($("saveStatus"),"",false);
+}
+
+async function checkSession(){
+  if(!accessToken){hideAdmin();return;}
+  try{
+    const r=await fetch(SUPABASE_URL+"/auth/v1/user",{
+      headers:{"apikey":SUPABASE_KEY,"Authorization":"Bearer "+accessToken}
+    });
+    if(!r.ok) throw new Error();
+    showAdmin();
+  }catch(e){
+    sessionStorage.removeItem(tokenKey);
+    accessToken=null;
+    hideAdmin();
+  }
+}
+
+$("loginBtn").onclick=async()=>{
+  const email=$("loginEmail").value.trim();
+  const password=$("loginPassword").value;
+  if(!email || !password){
+    setStatus($("loginStatus"),"Email ও Password দিন");
+    return;
+  }
+  $("loginBtn").disabled=true;
+  setStatus($("loginStatus"),"Login হচ্ছে...");
+  try{
+    const r=await fetch(SUPABASE_URL+"/auth/v1/token?grant_type=password",{
+      method:"POST",
+      headers:publicHeaders(),
+      body:JSON.stringify({email,password})
+    });
+    const raw=await r.text();
+    let data={};
+    try{ data=raw ? JSON.parse(raw) : {}; }catch(_){}
+    if(!r.ok){
+      const detail=data.error_description || data.msg || data.message || data.error || raw || ("HTTP "+r.status);
+      throw new Error("Login ব্যর্থ ("+r.status+"): "+detail);
+    }
+    if(!data.access_token){
+      throw new Error("Login response-এ access token পাওয়া যায়নি।"); 
+    }
+    accessToken=data.access_token;
+    sessionStorage.setItem(tokenKey,accessToken);
+    $("loginEmail").value="";
+    $("loginPassword").value="";
+    setStatus($("loginStatus"),"Login সফল");
+    showAdmin();
+    loadProducts();
+  }catch(e){
+    setStatus($("loginStatus"),e.message || "Login ব্যর্থ হয়েছে");
+  }finally{
+    $("loginBtn").disabled=false;
+  }
+};
+
+$("logoutBtn").onclick=()=>{
+  sessionStorage.removeItem(tokenKey);
+  accessToken=null;
+  hideAdmin();
+  loadProducts();
+};
+
+async function loadProducts(){
+  const box=$("products");
+  box.innerHTML="<p>পণ্য লোড হচ্ছে...</p>";
+  try{
+    const r=await fetch(
+      SUPABASE_URL+"/rest/v1/products?select=*&order=created_at.desc",
+      {headers:publicHeaders()}
+    );
+    const raw=await r.text();
+    if(!r.ok){
+      let data={};
+      try{ data=raw ? JSON.parse(raw) : {}; }catch(_){}
+      const detail=data.message || data.error || data.hint || raw || ("HTTP "+r.status);
+      throw new Error("পণ্য লোড ব্যর্থ ("+r.status+"): "+detail);
+    }
+    const items=raw ? JSON.parse(raw) : [];
+    if(!items.length){
+      box.innerHTML="<p>এখনও কোনো পণ্য যোগ করা হয়নি।</p>";
+      return;
+    }
+    box.innerHTML=items.map(p=>{
+      const adminButtons=accessToken ? `
+        <button class="small" onclick="editProduct(${Number(p.id)})">✏️ Edit</button>
+        <button class="small danger" onclick="deleteProduct(${Number(p.id)})">🗑️ Delete</button>
+      `:"";
+      return `<article class="card">
+        <a class="product-link" href="./?product=${encodeURIComponent(p.id)}">
+          <img src="${escapeHtml(p.image_url || "")}" alt="${escapeHtml(p.name)}"
+               onerror="this.style.display='none'">
+          <div class="card-body">
+            <h3>${escapeHtml(p.name)}</h3>
+            <div class="price">৳ ${escapeHtml(p.price)}</div>
+            <div class="desc">${escapeHtml(p.description)}</div>
+            <div style="margin-top:10px;font-weight:bold">🔎 বিস্তারিত দেখুন</div>
+          </div>
+        </a>
+        ${accessToken ? `<div class="card-body" style="padding-top:0">${adminButtons}</div>` : ""}
+      </article>`;
+    }).join("");
+  }catch(e){
+    box.innerHTML="<p>❌ "+escapeHtml(e.message)+"</p>";
+  }
+}
+
+async function uploadImage(file){
+  if(!file) return null;
+  const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+  const path=Date.now()+"_"+Math.random().toString(36).slice(2)+"_"+safeName;
+  const r=await fetch(
+    SUPABASE_URL+"/storage/v1/object/"+BUCKET+"/"+encodeURIComponent(path),
+    {
+      method:"POST",
+      headers:{
+        "apikey":SUPABASE_KEY,
+        "Authorization":"Bearer "+accessToken,
+        "x-upsert":"false",
+        "Content-Type":file.type || "application/octet-stream"
+      },
+      body:file
+    }
+  );
+  const text=await r.text();
+  if(!r.ok) throw new Error("ছবি Upload ব্যর্থ: "+text);
+  return SUPABASE_URL+"/storage/v1/object/public/"+BUCKET+"/"+path;
+}
+
+$("saveBtn").onclick=async()=>{
+  const name=$("productName").value.trim();
+  const price=$("productPrice").value;
+  const description=$("productDescription").value.trim();
+  const file=$("productImage").files[0];
+
+  if(!accessToken){setStatus($("saveStatus"),"আগে Admin Login করুন");return;}
+  if(!name || !price){setStatus($("saveStatus"),"পণ্যের নাম ও দাম দিন");return;}
+  if(!editingId && !file){setStatus($("saveStatus"),"নতুন পণ্যের ছবি নির্বাচন করুন");return;}
+
+  $("saveBtn").disabled=true;
+  setStatus($("saveStatus"),editingId ? "পণ্য আপডেট হচ্ছে..." : "ছবি ও পণ্য অনলাইনে প্রকাশ হচ্ছে...");
+  try{
+    let imageUrl=null;
+    if(file) imageUrl=await uploadImage(file);
+
+    if(editingId){
+      const body={name,price:Number(price),description};
+      if(imageUrl) body.image_url=imageUrl;
+      const r=await fetch(
+        SUPABASE_URL+"/rest/v1/products?id=eq."+encodeURIComponent(editingId),
+        {method:"PATCH",headers:authHeaders(),body:JSON.stringify(body)}
+      );
+      const text=await r.text();
+      if(!r.ok) throw new Error("Update ব্যর্থ: "+text);
+      setStatus($("saveStatus"),"✅ পণ্য সফলভাবে আপডেট হয়েছে!");
+    }else{
+      const r=await fetch(SUPABASE_URL+"/rest/v1/products",{
+        method:"POST",
+        headers:{...authHeaders(),"Prefer":"return=minimal"},
+        body:JSON.stringify({name,price:Number(price),description,image_url:imageUrl})
+      });
+      const text=await r.text();
+      if(!r.ok) throw new Error("পণ্য Save ব্যর্থ: "+text);
+      setStatus($("saveStatus"),"✅ পণ্য সফলভাবে অনলাইনে প্রকাশ হয়েছে!");
+    }
+    resetForm();
+    await loadProducts();
+  }catch(e){
+    setStatus($("saveStatus"),"❌ "+(e.message || e));
+  }finally{
+    $("saveBtn").disabled=false;
+  }
+};
+
+window.editProduct=async(id)=>{
+  if(!accessToken)return;
+  try{
+    const r=await fetch(
+      SUPABASE_URL+"/rest/v1/products?id=eq."+encodeURIComponent(id)+"&select=*",
+      {headers:authHeaders()}
+    );
+    const data=await r.json();
+    if(!r.ok || !data.length) throw new Error("পণ্য পাওয়া যায়নি");
+    const p=data[0];
+    editingId=id;
+    $("formTitle").textContent="✏️ পণ্য Edit করুন";
+    $("productName").value=p.name || "";
+    $("productPrice").value=p.price ?? "";
+    $("productDescription").value=p.description || "";
+    $("productImage").value="";
+    $("saveBtn").textContent="💾 পরিবর্তন Save করুন";
+    $("cancelBtn").classList.remove("hidden");
+    window.scrollTo({top:0,behavior:"smooth"});
+  }catch(e){
+    alert(e.message || "Edit করা যাচ্ছে না");
+  }
+};
+
+window.deleteProduct=async(id)=>{
+  if(!accessToken)return;
+  if(!confirm("এই পণ্যটি Delete করতে চান?"))return;
+  try{
+    const r=await fetch(
+      SUPABASE_URL+"/rest/v1/products?id=eq."+encodeURIComponent(id),
+      {method:"DELETE",headers:authHeaders()}
+    );
+    const text=await r.text();
+    if(!r.ok) throw new Error("Delete ব্যর্থ: "+text);
+    await loadProducts();
+  }catch(e){
+    alert(e.message || "Delete ব্যর্থ হয়েছে");
+  }
+};
+
+$("cancelBtn").onclick=resetForm;
+
+
+async function showProductDetail(){
+  const id = new URLSearchParams(location.search).get("product");
+  if(!id) return false;
+
+  // Hide the normal home/admin interface.
+  document.querySelectorAll("body > *").forEach(el => {
+    if(el.tagName !== "SCRIPT") el.style.display = "none";
+  });
+
+  const page = document.createElement("div");
+  page.className = "detail-page";
+  page.innerHTML = `
+    <a class="detail-back" href="./">← সব পণ্যে ফিরে যান</a>
+    <div class="detail-card" id="detailCard">
+      <div style="padding:30px;text-align:center">পণ্য লোড হচ্ছে...</div>
+    </div>`;
+  document.body.appendChild(page);
+
+  try{
+    const r = await fetch(
+      SUPABASE_URL + "/rest/v1/products?id=eq." + encodeURIComponent(id) + "&select=*",
+      {headers:publicHeaders()}
+    );
+    const raw = await r.text();
+    let data = [];
+    if(!r.ok){
+      let err={};
+      try{err=raw ? JSON.parse(raw):{}}catch(_){}
+      throw new Error(err.message || err.error || raw || ("HTTP "+r.status));
+    }
+    data = raw ? JSON.parse(raw) : [];
+    if(!data.length){
+      $("detailCard").innerHTML =
+        '<div style="padding:30px;text-align:center">❌ পণ্য পাওয়া যায়নি।</div>';
+      return true;
+    }
+
+    const p=data[0];
+    document.title=(p.name || "পণ্য")+" | JP Furniture";
+    $("detailCard").innerHTML = `
+      ${p.image_url ? `<img class="detail-image" src="${escapeHtml(p.image_url)}" alt="${escapeHtml(p.name || "Furniture")}">` : ""}
+      <div class="detail-body">
+        <h1 class="detail-name">${escapeHtml(p.name || "নাম নেই")}</h1>
+        <div class="detail-price">${p.price != null ? "৳ " + escapeHtml(Number(p.price).toLocaleString("bn-BD")) : "দাম জানতে যোগাযোগ করুন"}</div>
+        <div class="detail-desc">${escapeHtml(p.description || "কোনো বিবরণ দেওয়া হয়নি।")}</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:20px">
+          <a href="tel:+8801915813242" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#222;color:#fff;text-decoration:none;font-weight:bold">📞 কল করুন</a>
+          <a href="https://wa.me/8801915813242?text=${encodeURIComponent("JP Furniture-এর এই পণ্যটি সম্পর্কে জানতে চাই: " + (p.name || ""))}" target="_blank" rel="noopener" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#25D366;color:#fff;text-decoration:none;font-weight:bold">💬 WhatsApp করুন</a>
+        </div>
+      </div>`;
+  }catch(e){
+    $("detailCard").innerHTML =
+      '<div style="padding:30px;text-align:center">❌ পণ্য লোড ব্যর্থ: '+escapeHtml(e.message || String(e))+'</div>';
+  }
+  return true;
+}
+
+(async()=>{
+  const isDetail = await showProductDetail();
+  if(!isDetail){
+    checkSession();
+    loadProducts();
+  }
+})();
+</script>
+</body>
+</html>
